@@ -269,6 +269,8 @@ public class Bot {
                         e.getChannel().sendMessage(Meow.meow()).join();
                     } else if (text.contains("i") && (text.contains("sorry") || text.contains("sowwy"))) {
                         e.getChannel().sendMessage("is okie :3\nNo be sowwyy").join();
+                    } else if (text.contains("treasure hunt")) {
+                        new TreasureHunt(e.getChannel(), e.getMessageAuthor().asUser().get()).start();
                     } else {
                         e.getChannel().sendMessage("mrow?").join();
                     }
@@ -277,7 +279,7 @@ public class Bot {
                     e.getChannel().sendMessage("me no understandy :c").join();
                 }
             } else if (BOREDS.contains(msg.getChannel().getId())) {
-                if (text.contains("meow")) {
+                if (stringContainsMeow(text)) {
                     e.getChannel().sendMessage(Meow.meow()).join();
                 } else if (text.contains("hehe")) {
                     e.getChannel().sendMessage("hehe >:3").join();
@@ -287,6 +289,8 @@ public class Bot {
                     e.getChannel().sendMessage("<:catgirlhappypeek:1143286742934368286>").join();
                 } else if (text.contains("sadness") || text.contains("sandess")) {
                     e.getChannel().sendMessage("sandess").join();
+                } else if (text.contains("treasure hunt") && msg.getMentionedUsers().contains(api.getYourself())) {
+                    new TreasureHunt(e.getChannel(), e.getMessageAuthor().asUser().get()).start();
                 }
             }
         });
@@ -413,7 +417,7 @@ public class Bot {
                                 }
                             } else if (operation == 'l') {
                                 var index = 0;
-                                for (long l : target) {
+                                for (var l : target) {
                                     System.out.println(index++ + ": " + l);
                                 }
                             }
