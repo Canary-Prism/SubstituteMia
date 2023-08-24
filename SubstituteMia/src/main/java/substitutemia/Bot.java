@@ -10,12 +10,16 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Scanner;
+import java.util.concurrent.ExecutionException;
 
 import javax.swing.JOptionPane;
 
 import org.javacord.api.DiscordApi;
 import org.javacord.api.DiscordApiBuilder;
+import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.intent.Intent;
+import org.javacord.api.entity.message.MessageBuilder;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.json.JSONWriter;
@@ -26,6 +30,9 @@ public class Bot {
 
     private DiscordApi api;
     private ArrayList<Meow> meows = new ArrayList<Meow>();
+
+
+    private static ArrayList<Trigger> triggers;
 
     private static String working_directory;
 
@@ -61,16 +68,18 @@ public class Bot {
 
         folder = new File(working_directory);
         save_file = new File(working_directory + "/save.json");
+        triggers_file = new File(working_directory + "/triggers.json");
 
         loadSaves();
 
+        TreasureHunt.op = (Dotenv.configure().load().get("OP").equals("true"));
         var bot = new Bot();
         bot.start();
         new TerminalCommands("commands", bot).start();
         System.out.println("Bot started!");
     }
 
-    private static File folder, save_file;
+    private static File folder, save_file, triggers_file;
 
     private static String buffer = "";
 
@@ -84,6 +93,8 @@ public class Bot {
                         buffer = "";
                         Files.readAllLines(save_file.toPath(), StandardCharsets.UTF_8).forEach((line) -> buffer += line);
                         JSONObject contents = new JSONObject(buffer);
+                        COMMANDABLES = new ArrayList<>();
+                        BOREDS = new ArrayList<>();
 
                         contents.getJSONArray("commandables").forEach((id) -> {
                             COMMANDABLES.add((long) id);
@@ -100,6 +111,24 @@ public class Bot {
                     }
                 } else {
                     save_file.createNewFile();
+                }
+                if (triggers_file.exists()) {
+                    try {
+                        buffer = "";
+                        Files.readAllLines(triggers_file.toPath(), StandardCharsets.UTF_8).forEach((line) -> buffer += line);
+
+                        triggers = new ArrayList<>();
+
+                        JSONArray contents = new JSONArray(buffer);
+                        contents.forEach((item) -> {
+                            var e = (JSONObject) item;
+                            triggers.add(new Trigger(e.getString("trigger"), e.getString("response"), e.getInt("availability"), e.getBoolean("requires_ping")));
+                        });
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                } else {
+                    triggers_file.createNewFile();
                 }
             }
         } catch (IOException e) {
@@ -136,6 +165,29 @@ public class Bot {
 
             fw.close();
 
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(null, "Cannot Access Save Data", "sadness", JOptionPane.ERROR_MESSAGE);
+            System.exit(-1);
+        }
+        try (FileWriter fw = new FileWriter(triggers_file)) {
+            var writer = new JSONWriter(fw)
+                .array();
+            for (Trigger t : triggers) {
+                writer
+                    .object()
+                        .key("trigger")
+                        .value(t.getTrigger())
+                        .key("response")
+                        .value(t.getResponse())
+                        .key("availability")
+                        .value(t.getAvailability())
+                        .key("requires_ping")
+                        .value(t.requiresPing())
+                    .endObject();
+            }
+            writer
+                .endArray();
+            fw.close();
         } catch (IOException e) {
             JOptionPane.showMessageDialog(null, "Cannot Access Save Data", "sadness", JOptionPane.ERROR_MESSAGE);
             System.exit(-1);
@@ -267,13 +319,31 @@ public class Bot {
                         }
                     } else if (stringContainsMeow(text)) {
                         e.getChannel().sendMessage(Meow.meow()).join();
-                    } else if (text.contains("i") && (text.contains("sorry") || text.contains("sowwy"))) {
-                        e.getChannel().sendMessage("is okie :3\nNo be sowwyy").join();
                     } else if (text.contains("treasure hunt")) {
                         new TreasureHunt(e.getChannel(), e.getMessageAuthor().asUser().get()).start();
+                    } else if (text.contains("clean up") && text.contains("mess") && msg.getMentionedUsers().contains(api.getYourself())) {
+                        temp = false;
+                        try {
+                            e.getChannel().getMessagesUntil((message) -> {
+                                if (message.getAuthor().isYourself())
+                                    temp = true;
+                                else if (temp)
+                                    return true;
+                                return false;
+                            }).get().forEach((message) -> {
+                                if (message.getAuthor().getId() == api.getClientId())
+                                    message.delete().join();
+                            });
+                            var response = new MessageBuilder().setContent("okie i clean up mess :3, sowwyy").send(e.getChannel()).join();
+                            Thread.sleep(3000);
+                            response.delete().join();
+                        } catch (InterruptedException | ExecutionException e1) {
+                            e.getChannel().sendMessage("i can't do that :o").join();
+                            e1.printStackTrace();
+                        }
                     } else {
-                        e.getChannel().sendMessage("mrow?").join();
-                    }
+                            e.getChannel().sendMessage("mrow?").join();
+                        }
                 } catch (NumberFormatException | ArrayIndexOutOfBoundsException exception) {
                     System.out.println(exception.getMessage());
                     e.getChannel().sendMessage("me no understandy :c").join();
@@ -281,20 +351,47 @@ public class Bot {
             } else if (BOREDS.contains(msg.getChannel().getId())) {
                 if (stringContainsMeow(text)) {
                     e.getChannel().sendMessage(Meow.meow()).join();
-                } else if (text.contains("hehe")) {
-                    e.getChannel().sendMessage("hehe >:3").join();
-                } else if (text.contains("Mia") || text.contains("mia")) {
-                    e.getChannel().sendMessage("mia? :3").join();
-                } else if (text.contains("cat")) {
-                    e.getChannel().sendMessage("<:catgirlhappypeek:1143286742934368286>").join();
-                } else if (text.contains("sadness") || text.contains("sandess")) {
-                    e.getChannel().sendMessage("sandess").join();
                 } else if (text.contains("treasure hunt") && msg.getMentionedUsers().contains(api.getYourself())) {
                     new TreasureHunt(e.getChannel(), e.getMessageAuthor().asUser().get()).start();
+                } else if (text.contains("clean up") && text.contains("mess") && msg.getMentionedUsers().contains(api.getYourself())) {
+                    temp = false;
+                    try {
+                        e.getChannel().getMessagesUntil((message) -> {
+                            if (message.getAuthor().isYourself())
+                                temp = true;
+                            else if (temp)
+                                return true;
+                            return false;
+                        }).get().forEach((message) -> {
+                            if (message.getAuthor().getId() == api.getClientId())
+                                message.delete().join();
+                        });
+                        var response = new MessageBuilder().setContent("okie i clean up mess :3, sowwyy").send(e.getChannel()).join();
+                        Thread.sleep(3000);
+                        response.delete().join();
+                    } catch (InterruptedException | ExecutionException e1) {
+                        e.getChannel().sendMessage("i can't do that :o").join();
+                        e1.printStackTrace();
+                    }
                 }
             }
+            triggers.forEach((trigger) -> {
+                trigger.evaluate(e, getChannelStatus(e.getChannel()));
+            });
         });
     }
+
+    private int getChannelStatus(TextChannel channel) {
+        var status = 0;
+        if (COMMANDABLES.contains(channel.getId())) {
+            status += 2;
+        } else if (BOREDS.contains(channel.getId())) {
+            status += 1;
+        }
+        return status;
+    }
+
+    private boolean temp;
 
     private boolean stringContainsMeow(String text) {
         for (String s : Meow.meow_worbs) {
@@ -347,7 +444,7 @@ public class Bot {
             ArrayList<Long> target = null;
             Character operation = null;
             long value = -1;
-            System.out.println("Command Listener Started\nCommands List:\n/commandables\n/boreds\n/save\n/msg");
+            System.out.println("Command Listener Started\nCommands List:\n/commandables\n/boreds\n/save\n/load\n/msg");
             while (true) {
                 target = null;
                 operation = null;
@@ -364,6 +461,10 @@ public class Bot {
                         } else if (args[0].equals("save")) {
                             save();
                             System.out.println("saved");
+                            continue;
+                        } else if (args[0].equals("load")) {
+                            loadSaves();
+                            System.out.println("loaded");
                             continue;
                         } else if (args[0].equals("msg")) {
                             if (args[1].equals("setchannel")) {

@@ -1,17 +1,16 @@
 package substitutemia;
 
-import java.util.ArrayList;
-
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.Message;
 import org.javacord.api.entity.message.MessageBuilder;
 import org.javacord.api.entity.message.component.ActionRow;
 import org.javacord.api.entity.message.component.Button;
-import org.javacord.api.entity.message.embed.EmbedBuilder;
 import org.javacord.api.entity.user.User;
 import org.javacord.api.listener.interaction.ButtonClickListener;
 
 public class TreasureHunt {
+
+    public static volatile boolean op = false;
 
     TextChannel channel;
     User user;
@@ -28,7 +27,7 @@ public class TreasureHunt {
     public void start() {
         channel.sendMessage("Treasure hunting time!\n" + //
                 " Original credit to verysmollgecko!! \n" + //
-                " Modified by Mia :3\n" + //
+                " Ported to Java and improved by Mia :3\n" + //
                 "\n" + //
                 "(press the **north,south,east,west** buttons to move!) NOW FIND IT!! :3\n" + //
                 "--------").join();
@@ -49,7 +48,7 @@ public class TreasureHunt {
             Button.primary("south", "South"),
             Button.primary("east", "East"),
             Button.primary("west", "West"),
-            Button.danger("stop", "Cancel")
+            Button.danger("stop", "End Game")
         ).send(channel).join();
 
         message.addButtonClickListener((e) -> {
@@ -64,6 +63,15 @@ public class TreasureHunt {
                 } else if (interaction.getCustomId().equals("west")) {
                     posx--;
                 } else if (interaction.getCustomId().equals("stop")) {
+                    message.createUpdater().removeAllComponents().addComponents(
+                        ActionRow.of(
+                            Button.danger("confirmkill", "Confirm End Game"),
+                            Button.secondary("cancelkill", "Cancel")
+                        )
+                    ).applyChanges().join();
+                    interaction.acknowledge();
+                    return;
+                } else if (interaction.getCustomId().contains("confirmkill")) {
                     channel.sendMessage("-----\n" + //
                             "\n" + //
                             "aww.. okiee :c\n").join();
@@ -72,6 +80,17 @@ public class TreasureHunt {
                     });
                     message.delete();
                     return;
+                } else if (interaction.getCustomId().equals("cancelkill")) {
+                    message.createUpdater().removeAllComponents().applyChanges().join();
+                    message.createUpdater().addComponents(ActionRow.of(
+                        Button.primary("north", "North"),
+                        Button.primary("south", "South"),
+                        Button.primary("east", "East"),
+                        Button.primary("west", "West"),
+                        Button.danger("stop", "End Game")
+                    )).applyChanges().join();
+                    interaction.acknowledge();
+                    return;
                 } else if (interaction.getCustomId().equals("continue")) {
                     message.createUpdater().removeAllComponents().applyChanges().join();
                     message.createUpdater().addComponents(ActionRow.of(
@@ -79,7 +98,7 @@ public class TreasureHunt {
                         Button.primary("south", "South"),
                         Button.primary("east", "East"),
                         Button.primary("west", "West"),
-                        Button.danger("stop", "Cancel")
+                        Button.danger("stop", "End Game")
                     )).applyChanges().join();
                 }
                 
@@ -121,7 +140,38 @@ public class TreasureHunt {
                 }
                 interaction.acknowledge();
             } else {
-                interaction.createImmediateResponder().setContent("<@" + interaction.getUser().getIdAsString() + "> This is not your game! >:3").respond();
+                if (op && interaction.getUser().isBotOwner()) {
+                    if (interaction.getCustomId().contains("confirmkill")) {
+                        message.createUpdater().removeAllComponents().applyChanges().join();
+                        message.getButtonClickListeners().forEach((listener) -> {
+                            message.removeListener(ButtonClickListener.class, listener);
+                        });
+                        message.delete();
+                        interaction.createImmediateResponder().setContent("Game forcefully ended by " + user.getApi().getOwner().get().join().getMentionTag()).respond().join();
+                        return;
+                    } else if (interaction.getCustomId().equals("opcancelkill")) {
+                        message.createUpdater().removeAllComponents().applyChanges().join();
+                        message.createUpdater().addComponents(ActionRow.of(
+                            Button.primary("north", "North"),
+                            Button.primary("south", "South"),
+                            Button.primary("east", "East"),
+                            Button.primary("west", "West"),
+                            Button.danger("stop", "End Game")
+                        )).applyChanges().join();
+                        interaction.acknowledge();
+                        return;
+                    } else if (interaction.getCustomId().equals("stop")) {
+                        message.createUpdater().removeAllComponents().addComponents(
+                            ActionRow.of(
+                                Button.danger("opconfirmkill", "Confirm End Game"),
+                                Button.secondary("opcancelkill", "Cancel")
+                            )
+                        ).applyChanges().join();
+                        interaction.acknowledge();
+                    }
+                } else {
+                    interaction.createImmediateResponder().setContent(interaction.getUser().getMentionTag() + " This is not your game! >:3").respond().join();
+                }
             }
         });
     }
